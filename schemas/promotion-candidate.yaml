@@ -1,0 +1,18 @@
+# Promotion Candidate Schema
+# Store completed files under state/queues/promotion-candidates/PROMO-YYYY-MM-DD-###.yaml
+# See CLAUDE.md for promotion workflow, gates, confidence policy, and authority rules.
+
+id: PROMO-YYYY-MM-DD-###
+created_at: ""                 # ISO 8601 datetime with timezone
+source_files: []               # raw file paths that triggered this promotion
+promotion_type: ""             # evidence | task-update | plan-update | requirement-update | decision-update | pattern | release-update
+                               # may combine with + (e.g. evidence+task-update)
+targets: []                    # wiki page paths to be created or updated
+proposed_changes: []           # human-readable list of changes to be applied
+contradiction_check:
+  conflicts_found: false
+  conflict_details: []         # describe any conflicts with approved knowledge
+confidence:
+  score: 0.00                  # 0.00-1.00; see confidence policy in CLAUDE.md
+review_required: true
+status: candidate              # candidate | linted | reviewed | applied | rejected | deferred
