@@ -20,12 +20,20 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Locate the task file — name may include a title slug after the ID
-TASK_FILE=$(find "$REPO_ROOT/wiki/tasks/ready" -maxdepth 1 \
+# Locate the task file — wiki/tasks/ is flat; state lives in the `status` frontmatter
+# field, not the path. Name may include a title slug after the ID.
+TASK_FILE=$(find "$REPO_ROOT/wiki/tasks" -maxdepth 1 \
   \( -name "${TASK_ID}.md" -o -name "${TASK_ID}-*.md" \) 2>/dev/null | head -1)
 
 if [[ -z "$TASK_FILE" ]]; then
-  echo "Error: no ready task file found for $TASK_ID in wiki/tasks/ready/" >&2
+  echo "Error: no task file found for $TASK_ID in wiki/tasks/" >&2
+  exit 1
+fi
+
+# Gate on status (the single source of truth), not on a directory.
+if ! grep -qE '^status:[[:space:]]*ready[[:space:]]*$' "$TASK_FILE"; then
+  CURRENT=$(grep -E '^status:' "$TASK_FILE" | head -1 | sed 's/^status:[[:space:]]*//')
+  echo "Error: $TASK_ID has status '${CURRENT:-unknown}', not 'ready' — only ready tasks can be run." >&2
   exit 1
 fi
 

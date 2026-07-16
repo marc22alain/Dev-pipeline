@@ -40,7 +40,7 @@ If the task context includes a `code_root` path, use it as the base for all code
 ## Context Bundle
 
 At session start, you will receive a context bundle assembled by the task-runner. It contains:
-- The task page (from `wiki/tasks/in-progress/TASK-###.md`)
+- The task page (`wiki/tasks/TASK-###.md`; `wiki/tasks/` is flat — state is in the `status` field, which will read `leased` during your session)
 - All linked requirement pages
 - All linked decision pages
 - A session record stub (at `raw/coding-sessions/CS-YYYY-MM-DD-###.md`)

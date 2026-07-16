@@ -21,7 +21,7 @@ branch: <branch-name>
 reviewer: Brent                        # person name, or "ai-gpt5", "ai-claude", etc.
 reviewer_type: human                   # human | ai
 task_refs:
-  - wiki/tasks/done/TASK-NNN-...md    # full paths; may be plural if review spans tasks
+  - wiki/tasks/TASK-NNN-...md    # full paths (flat dir); may be plural if review spans tasks
 status: raw                            # raw | triaged | closed
 ---
 ```

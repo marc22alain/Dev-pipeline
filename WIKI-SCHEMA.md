@@ -108,13 +108,8 @@ project-root/
 │   │   ├── milestones/
 │   │   ├── releases/
 │   │   └── investigations/
-│   ├── tasks/
-│   │   ├── ready/
-│   │   ├── in-progress/
-│   │   ├── blocked/
-│   │   ├── in-review/
-│   │   ├── done/
-│   │   └── superseded/
+│   ├── tasks/                       ← flat: one file per task; state lives in the `status` frontmatter field, NOT the path
+│   │   └── TASK-###-<slug>.md        ← never moves between folders; `status` is the single source of truth
 │   ├── evidence/
 │   ├── releases/
 │   ├── retros/
@@ -183,6 +178,8 @@ Application concept pages promoted from the developer's context document. Stable
 ## Reference conventions
 
 All reference fields in frontmatter must use **full file paths** relative to the repository root. Bare IDs (`ITER-###`, `GAP-###`, `REQ-###`, `CS-###`) are not valid — they require inference to resolve and break when files are renamed or moved.
+
+For this reason `wiki/tasks/` is a **flat directory**: a task's state is recorded only in its `status` frontmatter field, never in its path. A task file's location (`wiki/tasks/TASK-###-<slug>.md`) is therefore stable across its entire lifecycle, so `depends_on` and other references to it stay valid through every state transition. (Encoding state in the path — a per-state subfolder — would move the file on every promotion and invalidate every inbound reference.)
 
 ### Simple references
 
@@ -329,7 +326,7 @@ open -> assessing -> awaiting-approval -> approved -> applying -> applied -> clo
 
 7. **Task breakdown**
    - When no `blocking: true` gaps remain: prompt for task breakdown.
-   - Create task pages in `wiki/tasks/draft/` linked to the final analysis iteration (`iter_ref`) and approved requirements.
+   - Create task pages in `wiki/tasks/` with `status: draft`, linked to the final analysis iteration (`iter_ref`) and approved requirements.
 
 8. **Log**
    - Append to `wiki/log.md`: date, ITER-ID, feature, gaps identified, gaps resolved, blocking gaps remaining.
@@ -362,7 +359,7 @@ open -> assessing -> awaiting-approval -> approved -> applying -> applied -> clo
 5. **Apply** (once approved):
    - Requirements: create a superseding version; set `superseded_by` on the old page. Do not edit the approved page in place.
    - ADRs: create a new `ADR-###`; set the old ADR `status: superseded` and `superseded_by: ADR-NNN`. Do not edit an accepted ADR in place.
-   - Tasks: create new follow-on task(s) for the changed behavior — do not edit a `done` task's description, context, or acceptance criteria in place. A done task's body is a historical record of what was approved and shipped at the time it ran; rewriting it to match the new behavior destroys that record. Cancel and replace only if scope changed so fundamentally the old task should never have existed; cancelled tasks → `wiki/tasks/superseded/`.
+   - Tasks: create new follow-on task(s) for the changed behavior — do not edit a `done` task's description, context, or acceptance criteria in place. A done task's body is a historical record of what was approved and shipped at the time it ran; rewriting it to match the new behavior destroys that record. Cancel and replace only if scope changed so fundamentally the old task should never have existed; set such tasks to `status: cancelled` (they stay in `wiki/tasks/`).
    - **Supersession pointer timing**: do not set `superseded_by` on the old task (or `supersedes` on the new task) at CR-approval time — the superseding work hasn't shipped yet, and if the new task fails, is revised, or is cancelled, the old task's behavior is still the real, current behavior. Set the pointers only when the new task is promoted to `done`: at that point set `superseded_by: <path-to-new-task>` on the old task and `supersedes: <path-to-old-task>` on the new task, and note the pointer update in the promotion's `wiki/log.md` entry. Until that point, the CR page itself (`wiki/changes/<feature-slug>/CR-NNN.md`) is the only record that a change is in flight.
    - Analysis artifacts: mark the prior iteration/ERD as superseded; trigger a new analysis iteration.
 6. **Re-analysis**: if `impact_scope` includes `data-model` or `lifecycle`, return to step 2 of the analysis iteration workflow. Set `iter_triggered` on the change request.
@@ -396,7 +393,7 @@ open -> assessing -> awaiting-approval -> approved -> applying -> applied -> clo
 **Steps:**
 
 1. **Human rejects the promotion candidate** — set `status: withdrawn` on the candidate in `state/queues/promotion-candidates/PROMO-YYYY-MM-DD-###.yaml`.
-2. **Human adds revision notes to the task** — set `revision_notes` in the task frontmatter describing the specific issues that must be fixed. Move the task file back to `wiki/tasks/ready/`. Update `status: ready`, `updated`, clear the `lease` block.
+2. **Human adds revision notes to the task** — set `revision_notes` in the task frontmatter describing the specific issues that must be fixed. Set `status: ready` (the file stays put in `wiki/tasks/`), update `updated`, and clear the `lease` block.
 3. **Task runner detects a revision session** — when a `ready` task has both `revision_notes` and existing `session_refs`, the task runner treats the new session as a **revision session**. In addition to the standard context bundle, it includes:
    - All prior session logs from `session_refs`.
    - Evidence documents from prior reviews (EVID-NNN pages linked from prior sessions).

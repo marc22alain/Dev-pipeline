@@ -19,7 +19,7 @@ You operate at authority level 2 (curated synthesis) with the ability to produce
 ## Inputs you expect
 
 Before beginning, confirm you have received:
-1. The task document (from `wiki/tasks/in-progress/TASK-###.md` or `wiki/tasks/in-review/TASK-###.md`)
+1. The task document (`wiki/tasks/TASK-###.md`; `wiki/tasks/` is flat — the `status` field carries the task's state)
 2. The coding session log (`raw/coding-sessions/CS-YYYY-MM-DD-###.md`)
 3. Any linked requirement pages (`wiki/requirements/...`)
 4. Any linked decision pages (`wiki/architecture/decisions/...`)

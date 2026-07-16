@@ -1,6 +1,6 @@
 # Task Schema
 
-Template for a task page. Store under `wiki/tasks/<status>/TASK-###-short-title.md`.
+Template for a task page. Store under `wiki/tasks/TASK-###-short-title.md` (flat directory — the file does not move between folders; the `status` frontmatter field is the single source of truth for state).
 
 See `CLAUDE.md` for the task state machine and ready-task contract. See `.claude/agents/task-runner.md` for lease rules and session bookkeeping.
 

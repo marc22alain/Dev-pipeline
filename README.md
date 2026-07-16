@@ -40,7 +40,7 @@ The orchestrator agent has a very good understanding of the practices and core p
 
 ### 1. Run a coding task
 
-Move a task page to `wiki/tasks/ready/`, then launch the task-runner:
+Set a task's `status: ready` (task files live flat in `wiki/tasks/` — state is in the `status` field, not the path), then launch the task-runner:
 
 ```bash
 ./scripts/run-task.sh TASK-###
@@ -93,7 +93,7 @@ Human review is required before a candidate is accepted and the task moves to `d
 **If the candidate is rejected**, use the task revision workflow instead of discarding the task:
 
 1. Set `status: withdrawn` on the promotion candidate.
-2. Add `revision_notes` to the task frontmatter describing what must be fixed, move it back to `wiki/tasks/ready/`, set `status: ready`, and clear the `lease` block.
+2. Add `revision_notes` to the task frontmatter describing what must be fixed, set `status: ready` (task files stay put in the flat `wiki/tasks/`), and clear the `lease` block.
 3. Re-run `./scripts/run-task.sh TASK-###`. The task runner detects `revision_notes` alongside existing `session_refs` and dispatches a **revision session**: the coding agent receives the prior session logs and evidence plus the fix scope, and implements only the named fixes.
 4. The reviewer produces a new evidence document superseding the prior one and confirms each `revision_notes` item is resolved. `revision_notes` is cleared on promotion to `done`. Prior sessions and evidence are preserved as the historical record. See [WIKI-SCHEMA.md](WIKI-SCHEMA.md) for the full workflow.
 

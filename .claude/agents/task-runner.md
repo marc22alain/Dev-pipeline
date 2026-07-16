@@ -18,7 +18,7 @@ You wrap every coding session with correct pre-session setup, in-session monitor
 ## Pre-session checklist (do not skip any step)
 
 ### 1. Validate task state
-- Read the task file from `wiki/tasks/ready/TASK-###.md`.
+- Read the task file `wiki/tasks/TASK-###.md`. (`wiki/tasks/` is flat — task files never move between directories; the `status` frontmatter field is the single source of truth for state.)
 - Confirm `status: ready`.
 - Confirm `acceptance_criteria` is non-empty.
 - Confirm `requirement_refs` resolves to at least one existing wiki page.
@@ -36,7 +36,7 @@ You wrap every coding session with correct pre-session setup, in-session monitor
   ```
 - Write the lease to `state/leases/TASK-###.yaml`.
 - Update the task frontmatter: set `status: leased`, set `lease` block, append the new session ID to `session_refs`.
-- Move the task file from `wiki/tasks/ready/` to `wiki/tasks/in-progress/`.
+- Do **not** move the task file — its path (`wiki/tasks/TASK-###.md`) is stable. The `status: leased` field is what marks it as in-progress work.
 - Append a log entry to `wiki/log.md`:
   ```
   [YYYY-MM-DD HH:MM] task-runner | lease-acquired | TASK-### | session: CS-YYYY-MM-DD-### | expires: <expiry>
@@ -90,16 +90,18 @@ draft -> ready -> leased -> in-progress -> in-review -> verified -> done
                   \-> superseded
 ```
 
-Map outcome to transition:
+Map outcome to the new `status`:
 
-| Outcome type | New task status | Move file to |
-|---|---|---|
-| `complete` | `in-review` | `wiki/tasks/in-review/` |
-| `partial-complete` | `in-review` | `wiki/tasks/in-review/` |
-| `blocked` | `blocked` | `wiki/tasks/blocked/` |
-| `speculative-completion` | `in-review` | `wiki/tasks/in-review/` |
-| `failed` | `ready` | `wiki/tasks/ready/` (reset for retry) |
-| `cancelled` | `cancelled` | `wiki/tasks/superseded/` |
+| Outcome type | New task status |
+|---|---|
+| `complete` | `in-review` |
+| `partial-complete` | `in-review` |
+| `blocked` | `blocked` |
+| `speculative-completion` | `in-review` |
+| `failed` | `ready` (reset for retry) |
+| `cancelled` | `cancelled` |
+
+Apply the transition **in place** by editing the `status` field in `wiki/tasks/TASK-###.md`. **Task files never move between directories** — `wiki/tasks/` is flat and `status` is the single source of truth. (This means a dependency's path in another task's `depends_on` stays valid across every transition.)
 
 - Update task frontmatter: `status`, `updated`, `blocking_session_ref` (if blocked), clear `blocking_session_ref` (if returning to ready).
 - Release the lease: delete `state/leases/TASK-###.yaml`.
