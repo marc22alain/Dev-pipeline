@@ -78,7 +78,16 @@ Collect and inject into the coding agent:
 - Set `status: closed`, `ended_at`, `outcome_type`, `outcome_summary`.
 - If outcome is `blocked`, set `blocking_reason_type` and `blocking_detail`.
 
-### 2. Apply the state transition
+### 2. Run the code review (mandatory)
+
+Every session that returns `complete`, `partial`, or `speculative-completion` **must** be independently reviewed before its state advances. Do not perform this review yourself and do not skip it — the review is an independent pass by the `session-code-reviewer` sub-agent, and it is the gate that produces the evidence any later promotion to `verified`/`done` rests on. (This step previously lived only in the reviewer's agent description, which the task-runner heeded at its discretion, so it fired inconsistently — one evidence page across the first six tasks. It is now a required step, not a discretionary one.)
+
+- Spawn the `session-code-reviewer` sub-agent with the full context bundle: the task document, the just-closed session log, every linked requirement and decision page, and any prior `EVID-###` pages for this task.
+- The reviewer verifies acceptance criteria directly against the code (not just the narrative), re-runs the test suite itself, checks constraint compliance and traceability, and writes an evidence page `wiki/evidence/EVID-###-<slug>.md` with a `verdict` (per the evidence schema: `pass | fail | inconclusive | partial`) and a confidence score.
+- Record the returned `verdict`, `confidence`, and evidence page id — you use them in steps 3, 4, 6, and 7. Confirm the evidence page is listed in the `evidence:` block of `state/manifests/health-summary.yaml` (the reviewer writes it; verify it is present).
+- Outcomes that never reach code review — `failed` (reset to `ready`) and `cancelled` — skip the reviewer. When you skip it, say so explicitly in the `wiki/log.md` entry rather than leaving the skip silent.
+
+### 3. Apply the state transition
 
 Use the task state machine from CLAUDE.md:
 
@@ -95,11 +104,18 @@ Map outcome to the new `status`:
 | Outcome type | New task status |
 |---|---|
 | `complete` | `in-review` |
-| `partial-complete` | `in-review` |
+| `partial` | `in-review` |
 | `blocked` | `blocked` |
 | `speculative-completion` | `in-review` |
 | `failed` | `ready` (reset for retry) |
 | `cancelled` | `cancelled` |
+
+**Review gate:** for `complete`, `partial`, and `speculative-completion`, the transition to `in-review` is contingent on the step-2 reviewer verdict (evidence schema: `pass | fail | inconclusive | partial`). Route by verdict:
+
+- `pass` — apply the mapping above (advance to `in-review`, no human flag).
+- `partial` — advance to `in-review`, but set `human_action_required: true` and record the unmet criteria as noted gaps for the human to accept or send back.
+- `inconclusive` — the review could not be completed (tests would not run, an artifact was absent, a claim was unverifiable). Advance to `in-review` as a **held** state, but set `human_action_required: true` and `review_required: true` on the promotion candidate, with a reason stating the verification was incomplete. Do **not** reset to `ready` (the code may be correct) and do **not** let it be promoted to `verified`/`done` until the verification is redone or a human clears it. Note: `in-review` here means "pending review resolution," not "reviewed" — the actual block is at the promotion gate, which the orchestrator/human controls.
+- `fail` — override the mapping: set `status: ready`, write `revision_notes` describing the blocking issues the reviewer found, clear the lease, and set `human_action_required: true`. Do **not** advance to `in-review`.
 
 Apply the transition **in place** by editing the `status` field in `wiki/tasks/TASK-###.md`. **Task files never move between directories** — `wiki/tasks/` is flat and `status` is the single source of truth. (This means a dependency's path in another task's `depends_on` stays valid across every transition.)
 
@@ -107,27 +123,28 @@ Apply the transition **in place** by editing the `status` field in `wiki/tasks/T
 - Release the lease: delete `state/leases/TASK-###.yaml`.
 - Clear the `lease` block in the task frontmatter.
 
-### 3. Create a promotion candidate
+### 4. Create a promotion candidate
 - Write a promotion candidate to `state/queues/promotion-candidates/PROMO-YYYY-MM-DD-###.yaml` using the template at `schemas/promotion-candidate.yaml`.
-- Set `source_files` to the session log path.
+- Set `source_files` to the session log path, and list the step-2 evidence page (`wiki/evidence/EVID-###-<slug>.md`) in `targets`.
 - Set `promotion_type` based on outcome (e.g., `evidence+task-update`).
-- Set `review_required: true` if outcome is `speculative-completion` or if any contradiction was found.
-- Set `confidence` score per CLAUDE.md confidence policy.
+- Set `review_required: true` if the reviewer verdict is anything other than `pass` (`fail`, `inconclusive`, or `partial`), if outcome is `speculative-completion`, or if any contradiction was found.
+- Carry the reviewer `verdict` and `confidence` into the candidate; set the candidate `confidence` score per CLAUDE.md confidence policy.
 
-### 4. Run scoped lint
+### 5. Run scoped lint
 - Run lint on the task file, all referenced requirements, and the session log.
 - Write findings to `state/queues/lint-findings.json` (append or merge).
 - Write health summary to `state/manifests/health-summary.yaml`.
 - If any `error`-severity lint finding exists: flag it in the promotion candidate and set `status: linted-with-errors`.
 - Append lint summary to `wiki/log.md`.
 
-### 5. Log the session close
-Append to `wiki/log.md`:
+### 6. Log the session close
+Append to `wiki/log.md` — the reviewer line first (or a skip note for `failed`/`cancelled`), then the session-close line:
 ```
+[YYYY-MM-DD HH:MM] session-code-reviewer | review | TASK-### CS-YYYY-MM-DD-### | verdict: <pass|fail|inconclusive|partial> | evidence: EVID-### | human_required: yes/no
 [YYYY-MM-DD HH:MM] task-runner | session-closed | TASK-### | session: CS-YYYY-MM-DD-### | outcome: <outcome_type> | new-status: <status> | human-action-required: yes/no
 ```
 
-### 6. Write result file
+### 7. Write result file
 Write `state/queues/task-runner-reports/TASK-###.yaml` (create the directory if it does not exist):
 
 ```yaml
@@ -135,7 +152,7 @@ task: TASK-###
 session: CS-YYYY-MM-DD-###
 outcome: <outcome_type>
 new_status: <status>
-human_action_required: true|false
+human_action_required: true|false   # true if the reviewer verdict is not `pass`, or per Human approval triggers
 reason: ""   # one sentence if human_action_required is true, otherwise empty
 written_at: <ISO-8601 timestamp>
 ```
@@ -148,6 +165,7 @@ Do not include the full task document or session log in this file. The orchestra
 
 Always flag `human_action_required: true` when:
 - Outcome is `speculative-completion` (judgment calls made under ambiguity).
+- The session-code-reviewer returns a verdict other than `pass` (`fail`, `inconclusive`, or `partial`).
 - A contradiction with approved knowledge was found.
 - The task has `human_approval_required: true` in its frontmatter.
 - Lint returns any `error`-severity finding that blocks promotion.
@@ -177,6 +195,7 @@ Always flag `human_action_required: true` when:
 
 - Session IDs: `CS-YYYY-MM-DD-###` where `###` is a zero-padded sequence number for that date. Check `raw/coding-sessions/` to find the next available number.
 - Promotion IDs: `PROMO-YYYY-MM-DD-###` using the same date-scoped sequence pattern. Check `state/queues/promotion-candidates/`.
+- Evidence IDs: `EVID-###` — a zero-padded, project-wide sequence (not date-scoped). Check `wiki/evidence/` for the next available number.
 
 ---
 

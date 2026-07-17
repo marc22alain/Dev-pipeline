@@ -33,7 +33,7 @@ Follow this sequence exactly:
 
 ### Step 1 — Session log triage
 - Read the session log in full.
-- Identify the `outcome_type` field. Valid values: `success`, `partial`, `blocked`, `speculative-completion`, `failed`.
+- Identify the `outcome_type` field. Valid values (the coding-agent outcome taxonomy — see `.claude/agents/coding-agent.md`): `complete`, `partial`, `blocked`, `speculative-completion`. (`failed` and `cancelled` are task-runner routing states, not session outcomes, and never reach review.)
 - If `outcome_type` is `speculative-completion`, set `human_approval_required: true` immediately and flag it prominently in your output. This is non-negotiable per the promotion authority policy.
 - Note any blocking reasons, open questions, or ambiguities the coding agent recorded.
 
@@ -132,9 +132,17 @@ task_refs:
 plan_refs: []
 sources:
   - [session log path]
-verdict: [pass|partial|fail]
+verdict: [pass|partial|fail|inconclusive]
 verified_by: session-code-reviewer
 ```
+
+Derive the `verdict` from the Step 2 per-criterion determinations:
+- `pass` — every criterion is **met**.
+- `partial` — one or more criteria were **partially met** or **not met**, but each was actually verifiable (the *work* is incomplete, not the review).
+- `fail` — a **not met** criterion blocks the task's core purpose, or a contradiction with approved knowledge was found.
+- `inconclusive` — one or more criteria are **cannot verify** (tests would not run, a claimed artifact was absent, a claim could not be checked) and no evaluated criterion outright failed. This describes the *review*, not the work: never guess `pass`/`partial`/`fail` for something you could not actually verify.
+
+`fail` and `inconclusive` both block promotion to `verified`/`done`, but route differently (Step 10): `fail` → fix the code; `inconclusive` → fix the review conditions (re-run, supply the missing artifact) or escalate to a human.
 
 Assign confidence using these rules:
 - `0.85–1.00`: all acceptance criteria met, tests pass, no contradictions, clean lint
@@ -151,7 +159,7 @@ Set fields:
 - `targets`: list all pages to be modified
 - `proposed_changes`: list each state transition and file change
 - `contradiction_check.conflicts_found`: true/false
-- `review_required`: true if `human_approval_required` is set, or if confidence < 0.70, or if any criterion was `not met`
+- `review_required`: true if `human_approval_required` is set, if confidence < 0.70, if the verdict is anything other than `pass` (`partial`, `fail`, or `inconclusive`), or if any criterion was `not met`
 - `status`: `candidate` (clean) or `linted` with errors (blocked)
 
 ### Step 10 — Task state transition recommendation
@@ -160,9 +168,11 @@ Based on your findings, recommend exactly one of:
 
 | Outcome | Recommended transition | human_approval_required |
 |---|---|---|
-| All criteria met, lint clean, no contradictions | `in-progress` → `in-review` | false (unless speculative-completion) |
+| Verdict `pass`, lint clean, no contradictions | `in-progress` → `in-review` | false (unless speculative-completion) |
 | Speculative-completion outcome | `in-progress` → `in-review` | **true** |
-| Partial completion, no blockers | `in-progress` → `in-review` with noted gaps | true |
+| Verdict `partial`, no blockers | `in-progress` → `in-review` (noted gaps) | true |
+| Verdict `fail` (blocking criterion not met) | `in-progress` → `ready` with `revision_notes` (fix the code) | true |
+| Verdict `inconclusive` (could not verify) | `in-progress` → `in-review` (held; do **not** promote to `verified`/`done`) | **true** |
 | Blocking lint errors | No transition; return to coding agent | false |
 | Contradiction with approved knowledge | No transition; escalate to human | true |
 | Session outcome: blocked | `in-progress` → `blocked` | false |
@@ -177,7 +187,7 @@ Update the task frontmatter fields:
 
 Append a concise entry to `wiki/log.md`:
 ```
-[date] | session-code-reviewer | review | [TASK-###] [CS-ID] | verdict: [pass/partial/fail] | transition: [old→new] | human_required: [yes/no]
+[date] | session-code-reviewer | review | [TASK-###] [CS-ID] | verdict: [pass/partial/fail/inconclusive] | transition: [old→new] | human_required: [yes/no]
 ```
 
 ### Step 12 — Update lint state files
@@ -194,7 +204,7 @@ Return a structured report with these sections:
 ## Review Report — [TASK-###] / [CS-ID]
 
 ### Outcome summary
-- Verdict: [pass | partial | fail]
+- Verdict: [pass | partial | fail | inconclusive]
 - Recommended state transition: [old → new]
 - Human approval required: [yes | no]
 - Promotion candidate: [PROMO-ID or BLOCKED]

@@ -15,7 +15,7 @@ branch: ""                     # git branch name
 started_at: ""                 # ISO 8601 datetime with timezone
 ended_at: ""                   # ISO 8601 datetime with timezone
 status: completed              # completed | blocked | partial
-outcome_type: completed        # see outcome taxonomy in `.claude/agents/coding-agent.md`
+outcome_type: complete         # complete | partial | blocked | speculative-completion — see `.claude/agents/coding-agent.md`
 last_clean_commit: ""          # git commit hash of last valid committable state
 files_touched: []
 tests_run: []
